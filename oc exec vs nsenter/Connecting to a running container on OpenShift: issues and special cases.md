@@ -32,8 +32,8 @@ The following diagram describes the potential issue that could happen when we tr
 1. When oc exec starts a new process on the container, it does so with a regular process priority, on any of the CPUs assigned exclusively to the container.
 2. That means the newly spawned process could land on the same CPU as the busy-loop application running with a RT priority.
 3. If that happens, it may create one of the following two issues:
-  - The new process will never get any CPU time, since the RT application is not giving the CPU back. Then, if the regular process holds a kernel lock for some reason, and that lock is required by a critical kernel thread, it can cause a complete system hang due to a deadlock.
-  - Alternatively, if the operating system gives some CPU time to the new process, it will steal that CPU time from the busy-loop thread, causing a latency spike and potentially preventing the real-time application from completing its task on time.
+   - The new process will never get any CPU time, since the RT application is not giving the CPU back. Then, if the regular process holds a kernel lock for some reason, and that lock is required by a critical kernel thread, it can cause a complete system hang due to a deadlock.
+   - Alternatively, if the operating system gives some CPU time to the new process, it will steal that CPU time from the busy-loop thread, causing a latency spike and potentially preventing the real-time application from completing its task on time.
 
 The key to this issue is the fact that, when we enter the pod using oc exec, the new process is only allowed to run on the same set of guaranteed CPUs as the container, without an option to choose on which CPU to run. If the new process is scheduled to run on the same CPU as the busy-loop RT process, there is a risk that it will impact its latency requirements, and in the worst case scenario cause a kernel hang.
 
@@ -49,12 +49,11 @@ Using nsenter requires access to the worker node and some extra steps to enter t
 
 While this process is a way to overcome the limitations of oc exec with latency-sensitive applications, it is not a silver bullet, and oc exec is much more convenient for the general use case. The following table details the differences and requirements for each tool.
 
-
 |      | oc exec | nsenter |
 | ---- | ------- | ------- |
-| Access requirements | Any node with network connectivity to the cluster | Must be executed from the worker node running the container |
-| Other required knowledge | Only need to know the pod/container name | Need to get low-level container ID information |
-| Behavior on guaranteed QoS class pods | Same cpumask as container (runs on isolated cores), conflicts with latency-sensitive applications and potential hang when running busy-loop threads with RT priority | Same cpumask as OS processes (runs on reserved CPU cores or unused isolated cores), no conflict with latency-sensitive applications or CPUs running busy-loop threads with RT priority |
+| *Access requirements* | Any node with network connectivity to the cluster | Must be executed from the worker node running the container |
+| *Other required knowledge* | Only need to know the pod/container name | Need to get low-level container ID information |
+| *Behavior on guaranteed QoS class pods* | Same cpumask as container (runs on isolated cores), conflicts with latency-sensitive applications and potential hang when running busy-loop threads with RT priority | Same cpumask as OS processes (runs on reserved CPU cores or unused isolated cores), no conflict with latency-sensitive applications or CPUs running busy-loop threads with RT priority |
  
 # Summary and future steps
 
@@ -70,4 +69,61 @@ For the future, a better alternative would be to include additional functionalit
 
 # Appendix A: how to use nsenter to access a container namespaces
 
-(add content here)
+1. Get the CRI-O container ID:
+   ```
+   $ oc describe pod <pod name> |grep -i container.*id
+   ```
+
+   You will get the container ID in the following format:
+   ```
+   Container ID:  cri-o://567558dae179435d351deb71bb39d50c2f6e2387e732804f61d5a800e3c9b9ee
+   ```
+
+2. Enter the node running the pod:
+   ```
+   $ oc debug node/<node name>
+   ``` 
+
+   Once inside the debug pod:
+   ```
+    $ chroot /host
+   ```
+   
+   As an alternative, we can run:
+   ```
+    $ ssh core@<node IP>
+   ```
+
+   And then:
+   ```
+   $ sudo su
+   ```
+
+3. Find the PID for the pod's main process. This can be done in two ways:
+
+   If we know the process name, we can simply do:
+   ```
+   # ps -ef|grep <process name>
+   ```    
+
+   And then get the process ID. Otherwise, we can use the container ID from step 1 and run:
+   ```        
+   # crictl inspect <container ID> |grep -i pid.*[0-9]
+   ```
+
+   We will see something like the following:
+   ```
+      "pid": 54526,
+   ```
+
+4. With the process ID, we can enter its namespace:
+   ```
+   # nsenter -a -t <PID>
+   ```
+
+   This will start a shell. We can run a command directly with:
+   ```
+   # nsenter -a -t <PID> -- <command and arguments>
+   ```
+
+5. We can check using `taskset` that the CPU mask for the new process does not contain the isolated CPUs used by the pod.
