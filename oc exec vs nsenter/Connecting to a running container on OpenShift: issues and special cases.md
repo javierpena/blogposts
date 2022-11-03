@@ -1,8 +1,13 @@
-# Introduction
+# Connecting to a running container on OpenShift: issues and special cases
+
+## Author
+Javier Peña (@fj_pena).
+
+## Introduction
 
 When running a containerized application on OpenShift, you may want to connect to the running container to run some troubleshooting tools or check the status of a program. You can easily do that with the oc exec or or rsh commands, but there are some use cases, such as latency-sensitive applications, and applications running a busy loop with a real time priority, where you should not do that, and use an alternative instead.
 
-# What happens when we run oc exec
+## What happens when we run oc exec
 
 The oc exec (or kubectl exec) usage is well described in several resources, such as the [Kubernetes documentation for kubectl exec](https://kubernetes.io/docs/tasks/debug/debug-application/get-shell-running-container/) and the [OpenShift developer documentation for oc exec](https://docs.openshift.com/container-platform/4.11/nodes/containers/nodes-containers-remote-commands.html). The following diagram shows what happens under the hood, with the connection flow between the different components:
 
@@ -14,7 +19,7 @@ The oc exec (or kubectl exec) usage is well described in several resources, such
 
 The above described process allows us to connect to any running container from our workstation, as long as we have network connectivity to the OpenShift API server. It is a very convenient way, but there is one use case where this is bound to create issues.
 
-# Limitations and corner cases
+## Limitations and corner cases
 
 There are cases where a containerized application will have a requirement for maximum throughput and minimum latency. Some of these examples include High-Performance Computing, AI or Telco 5G applications. These applications typically require some custom system tuning to remove all potential sources of interrupts from the application, such as hardware interrupts from devices or kernel threads. Such interrupts could cause a spike in latency, which would be unacceptable for the application.
 
@@ -37,7 +42,7 @@ The following diagram describes the potential issue that could happen when we tr
 
 The key to this issue is the fact that, when we enter the pod using oc exec, the new process is only allowed to run on the same set of guaranteed CPUs as the container, without an option to choose on which CPU to run. If the new process is scheduled to run on the same CPU as the busy-loop RT process, there is a risk that it will impact its latency requirements, and in the worst case scenario cause a kernel hang.
 
-# Alternatives to oc exec
+## Alternatives to oc exec
 
 Under the above mentioned configuration, connecting to the container using oc exec poses a potential risk. Thus, we need an alternative that allows us to access the container while running on a separate CPU set. For this purpose, we can use the [nsenter](https://www.redhat.com/sysadmin/container-namespaces-nsenter) utility, included by default with Red Hat Enterprise Linux and Red Hat OpenShift. 
 
@@ -55,19 +60,19 @@ While this process is a way to overcome the limitations of oc exec with latency-
 | **Other required knowledge** | Only need to know the pod/container name | Need to get low-level container ID information |
 | **Behavior on guaranteed QoS class pods** | Same cpumask as container (runs on isolated cores), conflicts with latency-sensitive applications and potential hang when running busy-loop threads with RT priority | Same cpumask as OS processes (runs on reserved CPU cores or unused isolated cores), no conflict with latency-sensitive applications or CPUs running busy-loop threads with RT priority |
  
-# Summary and future steps
+## Summary and future steps
 
 In general, running oc exec to connect to a running container is a safe and reliable mechanism. However, there are some corner cases where this may not be advisable. For those cases, using nsenter from the worker running the container is a valid, although more complex, alternative, that avoids placing the executed process in the same CPU set as the running container.
 
 For the future, a better alternative would be to include additional functionality into the oc client, so it can be instructed to start the process in a separate CPU set.
 
-# Acknowledgements
+## Acknowledgements
 
 - John Williams and Arkady Kavevsky, for their reviews and input on this post.
 - Lazhar Halleb, for the initial idea that inspired the post.
 - Grzegorz Halat, Juri Lelli and Daniel Bristot de Oliveira, for their help and knowledge transfer.
 
-# Appendix A: how to use nsenter to access a container namespaces
+## Appendix A: how to use nsenter to access a container namespaces
 
 1. Get the CRI-O container ID:
    ```
