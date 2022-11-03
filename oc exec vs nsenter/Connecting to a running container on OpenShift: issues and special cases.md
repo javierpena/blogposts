@@ -6,7 +6,7 @@ When running a containerized application on OpenShift, you may want to connect t
 
 The oc exec (or kubectl exec) usage is well described in several resources, such as the [Kubernetes documentation for kubectl exec](https://kubernetes.io/docs/tasks/debug/debug-application/get-shell-running-container/) and the [OpenShift developer documentation for oc exec](https://docs.openshift.com/container-platform/4.11/nodes/containers/nodes-containers-remote-commands.html). The following diagram shows what happens under the hood, with the connection flow between the different components:
 
-<img src="https://raw.githubusercontent.com/javierpena/blogposts/main/oc exec vs nsenter/images/oc exec workflow.png" width="600">
+<img src="https://raw.githubusercontent.com/javierpena/blogposts/main/oc exec vs nsenter/images/oc exec workflow.png">
 
 - First, the oc client connects to the OpenShift API server, running on one of the control plane nodes.
 - The API server will connect to the kubelet on the worker node running the container.
@@ -27,7 +27,7 @@ The combination of all the following requirements for one of these latency-sensi
 
 The following diagram describes the potential issue that could happen when we try to enter the running container using oc exec:
 
-<img src="https://raw.githubusercontent.com/javierpena/blogposts/main/oc exec vs nsenter/images/oc exec issue with busy-loop RT prio.png" width="600">
+<img src="https://raw.githubusercontent.com/javierpena/blogposts/main/oc exec vs nsenter/images/oc exec issue with busy-loop RT prio.png">
 
 1. When oc exec starts a new process on the container, it does so with a regular process priority, on any of the CPUs assigned exclusively to the container.
 2. That means the newly spawned process could land on the same CPU as the busy-loop application running with a RT priority.
@@ -43,7 +43,7 @@ Under the above mentioned configuration, connecting to the container using oc ex
 
 Nsenter allows us to enter one or more of the namespaces where a container is running. When run from the worker node running the container, we can effectively “get inside” the container without using oc exec. Since the tool is executed from the worker node shell (entered via oc debug node or SSH), it will be running on the set of CPUs reserved for the operating system and services, so it will not affect the workload running on the container. This prevents the risk for a latency spike in the application, or a low priority process starvation. The following diagram shows how this would work.
 
-<img src="https://raw.githubusercontent.com/javierpena/blogposts/main/oc exec vs nsenter/images/nsenter with busy-loop RT prio.png" width="600">
+<img src="https://raw.githubusercontent.com/javierpena/blogposts/main/oc exec vs nsenter/images/nsenter with busy-loop RT prio.png">
 
 Using nsenter requires access to the worker node and some extra steps to enter the container namespace. Appendix A contains the whole process.
 
@@ -51,9 +51,9 @@ While this process is a way to overcome the limitations of oc exec with latency-
 
 |      | oc exec | nsenter |
 | ---- | ------- | ------- |
-| *Access requirements* | Any node with network connectivity to the cluster | Must be executed from the worker node running the container |
-| *Other required knowledge* | Only need to know the pod/container name | Need to get low-level container ID information |
-| *Behavior on guaranteed QoS class pods* | Same cpumask as container (runs on isolated cores), conflicts with latency-sensitive applications and potential hang when running busy-loop threads with RT priority | Same cpumask as OS processes (runs on reserved CPU cores or unused isolated cores), no conflict with latency-sensitive applications or CPUs running busy-loop threads with RT priority |
+| **Access requirements** | Any node with network connectivity to the cluster | Must be executed from the worker node running the container |
+| **Other required knowledge** | Only need to know the pod/container name | Need to get low-level container ID information |
+| **Behavior on guaranteed QoS class pods** | Same cpumask as container (runs on isolated cores), conflicts with latency-sensitive applications and potential hang when running busy-loop threads with RT priority | Same cpumask as OS processes (runs on reserved CPU cores or unused isolated cores), no conflict with latency-sensitive applications or CPUs running busy-loop threads with RT priority |
  
 # Summary and future steps
 
