@@ -12,7 +12,7 @@ When building a 5G network, operators can choose from different configurations t
 The O-RAN Alliance defines several synchronization modes for the fronthaul network. In this post, we will be discussing the LLS-C1 configuration (see section 11.2.2.2 of the O-RAN.WG4.CUS.0-v09.00 document), depicted by the following diagram:
 
 
-![LLS-C1 Configuration](https://raw.githubusercontent.com/javierpena/blogposts/main/radvd/images/LLS-C1 Configuration.png")
+<img src="https://raw.githubusercontent.com/javierpena/blogposts/main/radvd/images/LLS-C1 Configuration.png">
 
 This configuration is a simple topology for network timing, where the Radio Unit (O-RU), connected to the 5G antenna, is directly connected to the Distributed Unit (O-DU) via a point-to-point network cable. When using IPv6, if the Radio Unit needs to connect to a system other than the Distributed Unit, that DU will need to act as an IPv6 router. Since those Distributed Units can be running on a container platform like Red Hat OpenShift Container Platform, we need to make sure the node running the O-DU will be able to act as an IPv6 router for the Radio Unit.
 
@@ -31,7 +31,7 @@ In Red Hat Enterprise Linux, RAs are provided by the radvd package, as described
 
 To use radvd in a worker node, we suggest running it as a pod inside the OCP cluster. To achieve this, first we need to create a container image including it. Then, we can create a container with the appropriate configuration and privileges, required to access the network cards on the node. See the diagram below.
 
-![Using radvd in a container](https://raw.githubusercontent.com/javierpena/blogposts/main/radvd/images/Using radvd in a container.png)
+<img src="https://raw.githubusercontent.com/javierpena/blogposts/main/radvd/images/Using radvd in a container.png">
 
 ### Create the container image
 
